@@ -70,7 +70,10 @@ pnpm build
 3. Keranjang, checkout, ongkir RajaOngkir ← selesai (PR #3): `modules/cart`, `modules/coupons`, `modules/checkout`, `modules/shipping`, `integrations/rajaongkir-cost`.
    Ongkir selalu di-quote ulang saat `placeOrder`; total harus sama dengan `expectedTotalIdr` dari pembeli, kalau tidak `TotalChangedError`.
    `feeIdr` = 0 sampai OD-016 diputuskan (Fase 4).
-4. Pembayaran Pakasir v2 (webhook inbox, rekonsiliasi, late-paid exception)
+4. Pembayaran Pakasir v2 ← selesai (PR #4): `integrations/pakasir`, `modules/payments`.
+   `paid` hanya lewat `applyVerifiedCompletion` setelah X-Secret + identitas + nominal + sandbox cocok DAN GET status resmi = completed.
+   Cek status ≤ 1×/4 detik per transaksi (`verifyAttemptStatus` mengklaim slot secara atomik).
+   Fee ditanggung merchant (`feeIdr` = 0) sampai OD-016. Metode aktif: `StoreSettings.paymentMethods` (default `payment_link`).
 5. Admin & fulfillment (pesanan, resi, fallback manual, refund manual, audit, notifikasi)
 6. UI storefront per SCR (Hallmark + DESIGN.md)
 7. Hardening (keamanan, SEO, aksesibilitas, backup/restore)

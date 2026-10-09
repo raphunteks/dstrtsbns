@@ -1080,6 +1080,7 @@ model StoreSettings {
   timezone               String   @default("Asia/Makassar")
   reservationHoldMinutes Int      @default(30)
   shippingCouriers       String[] @default([]) // kode kurir RajaOngkir yang diaktifkan owner (OD-004), mis. ["jne","sicepat"]
+  paymentMethods         String[] @default(["payment_link"]) // metode Pakasir aktif (OD-005); fee ditanggung merchant sampai OD-016
   featureFlags           Json     @default("{\"ready_stock\":true,\"preorder\":false,\"supplier_fulfilled\":false,\"komerce_delivery\":false}")
   businessInfo           Json     @default("{}")
   holidays               Json     @default("[]")

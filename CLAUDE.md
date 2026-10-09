@@ -74,7 +74,10 @@ pnpm build
    `paid` hanya lewat `applyVerifiedCompletion` setelah X-Secret + identitas + nominal + sandbox cocok DAN GET status resmi = completed.
    Cek status ≤ 1×/4 detik per transaksi (`verifyAttemptStatus` mengklaim slot secara atomik).
    Fee ditanggung merchant (`feeIdr` = 0) sampai OD-016. Metode aktif: `StoreSettings.paymentMethods` (default `payment_link`).
-5. Admin & fulfillment (pesanan, resi, fallback manual, refund manual, audit, notifikasi)
+5. Admin & fulfillment ← selesai (PR #5): `auth/staff.ts` (sesi + MFA aal2 + StaffRole), `modules/orders/{fulfillment,cancel}`,
+   `modules/refunds`, `modules/returns`, `modules/payments/exceptions`, `modules/finance`, `modules/notifications`, `modules/admin`, `modules/fulfillment/sources`.
+   Setiap Server Action admin WAJIB diawali `requireStaff(<permission>)`. Pengiriman = kurir manual teraudit; Komerce Delivery belum dibangun (OD-013).
+   Notifikasi diantrekan di `NotificationLog`; pengirim email belum dipilih (job `send-notifications` membiarkan antrean utuh).
 6. UI storefront per SCR (Hallmark + DESIGN.md)
 7. Hardening (keamanan, SEO, aksesibilitas, backup/restore)
 

@@ -235,6 +235,42 @@ export async function commitForOrder(tx: Tx, orderId: string): Promise<number> {
 }
 
 /**
+ * Order LUNAS dibatalkan sebelum dikirim (BR-013): kembalikan stok yang sudah dialokasikan.
+ * ready_stock → stok fisik kembali + ledger 'cancel_restock'; preorder/pemasok → kuota/komitmen kembali.
+ * Idempoten: hanya reservasi 'converted' yang berpindah ke 'released' pada panggilan ini.
+ */
+export async function returnCommittedForOrder(tx: Tx, orderId: string): Promise<number> {
+  const rows = await tx.$queryRaw<ReservedRow[]>`
+    UPDATE "app"."StockReservation"
+       SET "state" = 'released', "releasedAt" = now()
+     WHERE "orderId" = ${orderId}::uuid AND "state" = 'converted'
+     RETURNING "id", "variantId", "quantity", "mode", "supplierAvailabilityId"`;
+
+  for (const row of rows) {
+    if (row.mode === "ready_stock") {
+      await tx.$executeRaw`
+        UPDATE "app"."ProductVariant"
+           SET "stockOnHand" = "stockOnHand" + ${row.quantity}, "updatedAt" = now()
+         WHERE "id" = ${row.variantId}::uuid`;
+      await tx.inventoryLedger.create({
+        data: {
+          variantId: row.variantId,
+          delta: row.quantity,
+          reason: "cancel_restock",
+          referenceType: "order",
+          referenceId: orderId,
+        },
+      });
+    }
+  }
+  await giveBack(
+    tx,
+    rows.filter((r) => r.mode !== "ready_stock"),
+  );
+  return rows.length;
+}
+
+/**
  * Job: lepas reservasi yang lewat batas hold dan tandai order-nya kedaluwarsa.
  * Satu transaksi pendek per order. Aman dijalankan paralel/berulang.
  */

@@ -1,5 +1,6 @@
 import "server-only";
 import { runExpireReservations, runExpireSupplierAvailability } from "./inventory-jobs";
+import { runDailyReconciliation, runSendNotifications, runSyncWaybill } from "./operations-jobs";
 import { runProcessWebhookInbox, runReconcilePakasir } from "./payment-jobs";
 
 /**
@@ -16,23 +17,14 @@ export type JobResult = {
 
 type JobHandler = () => Promise<JobResult>;
 
-const notYet =
-  (phase: string): JobHandler =>
-  async () => ({
-    processed: 0,
-    remaining: 0,
-    status: "not_implemented",
-    note: `Diimplementasikan di ${phase}`,
-  });
-
 export const jobs = {
   "expire-reservations": runExpireReservations,
   "process-webhook-inbox": runProcessWebhookInbox,
   "reconcile-pakasir": runReconcilePakasir,
-  "send-notifications": notYet("Fase 5 (admin & notifikasi)"),
-  "sync-waybill": notYet("Fase 5 (fulfillment)"),
+  "send-notifications": runSendNotifications,
+  "sync-waybill": runSyncWaybill,
   "expire-supplier-availability": runExpireSupplierAvailability,
-  "daily-reconciliation": notYet("Fase 5 (keuangan)"),
+  "daily-reconciliation": runDailyReconciliation,
 } satisfies Record<string, JobHandler>;
 
 export type JobName = keyof typeof jobs;

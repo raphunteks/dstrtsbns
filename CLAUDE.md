@@ -67,7 +67,9 @@ pnpm build
 
 1. Fondasi ← selesai (PR #1)
 2. Katalog & inventori ← selesai (PR #2): `modules/catalog`, `modules/inventory`, uji integrasi `pnpm test:integration`
-3. Keranjang, checkout, ongkir RajaOngkir
+3. Keranjang, checkout, ongkir RajaOngkir ← selesai (PR #3): `modules/cart`, `modules/coupons`, `modules/checkout`, `modules/shipping`, `integrations/rajaongkir-cost`.
+   Ongkir selalu di-quote ulang saat `placeOrder`; total harus sama dengan `expectedTotalIdr` dari pembeli, kalau tidak `TotalChangedError`.
+   `feeIdr` = 0 sampai OD-016 diputuskan (Fase 4).
 4. Pembayaran Pakasir v2 (webhook inbox, rekonsiliasi, late-paid exception)
 5. Admin & fulfillment (pesanan, resi, fallback manual, refund manual, audit, notifikasi)
 6. UI storefront per SCR (Hallmark + DESIGN.md)

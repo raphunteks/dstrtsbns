@@ -1079,6 +1079,7 @@ model StoreSettings {
   supportWhatsapp        String?
   timezone               String   @default("Asia/Makassar")
   reservationHoldMinutes Int      @default(30)
+  shippingCouriers       String[] @default([]) // kode kurir RajaOngkir yang diaktifkan owner (OD-004), mis. ["jne","sicepat"]
   featureFlags           Json     @default("{\"ready_stock\":true,\"preorder\":false,\"supplier_fulfilled\":false,\"komerce_delivery\":false}")
   businessInfo           Json     @default("{}")
   holidays               Json     @default("[]")
@@ -1099,6 +1100,18 @@ model ProviderCredentialReference {
   createdAt       DateTime            @default(now())
 
   @@unique([service, environment])
+  @@schema("app")
+}
+
+/// Cache respons provider (pencarian wilayah, quote ongkir) agar hemat kuota & cepat (FR-090).
+/// Bukan sumber kebenaran: tarif final selalu di-quote ulang saat order dibuat (BR-008).
+model ProviderCache {
+  key       String   @id
+  value     Json
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
   @@schema("app")
 }
 

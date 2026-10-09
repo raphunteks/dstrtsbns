@@ -24,3 +24,8 @@ export async function findOrderByGuestToken(
   if (!order || !tokenMatches || !notRevoked) return null;
   return order.id;
 }
+
+/** Nama cookie token akses pesanan guest (dibatasi path /pesanan/<nomor>). */
+export function orderAccessCookie(publicNumber: string): string {
+  return `dts_o_${publicNumber.replace(/[^A-Za-z0-9-]/g, "")}`;
+}

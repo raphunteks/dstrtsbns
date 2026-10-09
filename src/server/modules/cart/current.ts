@@ -14,3 +14,11 @@ export async function getCurrentCartCount(): Promise<number> {
   });
   return result._sum.quantity ?? 0;
 }
+
+/** ID keranjang aktif dari cookie, tanpa membuat keranjang baru. */
+export async function getCurrentCartId(): Promise<string | null> {
+  const token = (await cookies()).get(CART_COOKIE)?.value;
+  if (!token) return null;
+  const cart = await db.cart.findFirst({ where: { token, expiresAt: { gt: new Date() } }, select: { id: true } });
+  return cart?.id ?? null;
+}

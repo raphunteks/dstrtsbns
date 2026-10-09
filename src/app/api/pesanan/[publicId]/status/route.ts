@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/server/db/client";
 import { getEnv } from "@/server/env";
-import { findOrderByGuestToken } from "@/server/modules/orders/access";
+import { findOrderByGuestToken, orderAccessCookie } from "@/server/modules/orders/access";
 import { getBuyerOrderStatus } from "@/server/modules/payments/buyer-status";
 import { getPaymentDeps } from "@/server/modules/payments/deps";
 
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ publicId: string }> }) {
   const { publicId } = await params;
-  const token = request.nextUrl.searchParams.get("t") ?? "";
+  const token = request.nextUrl.searchParams.get("t") ?? request.cookies.get(orderAccessCookie(publicId))?.value ?? "";
   const orderId = token ? await findOrderByGuestToken(db, getEnv().APP_SECRET, publicId, token) : null;
   if (!orderId) {
     return NextResponse.json({ error: "Pesanan tidak ditemukan." }, { status: 404 });

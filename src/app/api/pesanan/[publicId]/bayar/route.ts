@@ -4,7 +4,7 @@ import { db } from "@/server/db/client";
 import { getEnv } from "@/server/env";
 import { isDomainError } from "@/server/errors";
 import { ProviderError } from "@/server/integrations/http";
-import { findOrderByGuestToken } from "@/server/modules/orders/access";
+import { findOrderByGuestToken, orderAccessCookie } from "@/server/modules/orders/access";
 import { getPaymentDeps } from "@/server/modules/payments/deps";
 import { startPayment } from "@/server/modules/payments/start-payment";
 
@@ -25,7 +25,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   try {
     const payment = await startPayment(getPaymentDeps(), { orderId, method: parsed.data.method });
-    return NextResponse.json(payment, { headers: { "Cache-Control": "no-store" } });
+    const response = NextResponse.json(payment, { headers: { "Cache-Control": "no-store" } });
+    // Kembali dari halaman Pakasir tanpa ?t= → halaman pesanan membaca token dari cookie ini.
+    // Token tidak ikut dikirim ke Pakasir di URL redirect.
+    response.cookies.set(orderAccessCookie(publicId), parsed.data.t, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: getEnv().NODE_ENV === "production",
+      path: `/pesanan/${publicId}`,
+      maxAge: 7 * 86_400,
+    });
+    return response;
   } catch (error) {
     if (isDomainError(error)) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });

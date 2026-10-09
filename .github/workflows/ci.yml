@@ -10,17 +10,36 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write # hanya untuk meng-commit pnpm-lock.yaml pertama ke branch PR
+  contents: write # hanya untuk meng-commit file hasil generate (lockfile, migration init) ke branch PR
 
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dts
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     env:
-      # Nilai dummy: CI tidak menyentuh database atau layanan nyata.
-      POSTGRES_PRISMA_URL: postgresql://ci:ci@localhost:5432/ci?schema=app
-      POSTGRES_URL_NON_POOLING: postgresql://ci:ci@localhost:5432/ci?schema=app
+      # Database CI sekali pakai. Tidak ada layanan atau data nyata.
+      POSTGRES_PRISMA_URL: postgresql://postgres:postgres@localhost:5432/dts?schema=app&connection_limit=20
+      POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/dts?schema=app
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/shadow?schema=app
       NEXT_TELEMETRY_DISABLED: "1"
+      TZ: UTC
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,26 +52,41 @@ jobs:
           node-version: 22
 
       - name: Install
-        id: install
         shell: bash
         run: |
           if [ -f pnpm-lock.yaml ]; then
             pnpm install --frozen-lockfile
-            echo "created=false" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::pnpm-lock.yaml belum ada — install tanpa lockfile"
             pnpm install --no-frozen-lockfile
-            echo "created=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Commit lockfile pertama ke branch PR
-        if: github.event_name == 'pull_request' && steps.install.outputs.created == 'true'
+      - name: Buat migration init bila belum ada
         shell: bash
         run: |
+          if ls prisma/migrations/*_init/migration.sql >/dev/null 2>&1; then
+            echo "Migration init sudah ada."
+          else
+            mkdir -p prisma/migrations/20261009120000_init
+            pnpm exec prisma migrate diff \
+              --from-empty \
+              --to-schema-datamodel prisma/schema.prisma \
+              --script > prisma/migrations/20261009120000_init/migration.sql
+            echo "::notice::Migration init dibuat oleh CI"
+          fi
+
+      - name: Commit file hasil generate ke branch PR
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          git add pnpm-lock.yaml prisma/migrations
+          if git diff --cached --quiet; then
+            echo "Tidak ada file baru."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pnpm-lock.yaml
-          git commit -m "chore: tambah pnpm-lock.yaml dari CI"
+          git commit -m "chore: file hasil generate CI (lockfile / migration init)"
           git push origin "HEAD:${GITHUB_HEAD_REF}"
 
       - name: Prisma validate
@@ -79,13 +113,36 @@ jobs:
           set -o pipefail
           pnpm lint 2>&1 | tee lint.log
 
+      - name: Terapkan migration ke Postgres CI
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm db:migrate:deploy 2>&1 | tee migrate.log
+
+      - name: Cek drift schema vs migration
+        shell: bash
+        run: |
+          set -o pipefail
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE shadow" >/dev/null
+          pnpm exec prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "$SHADOW_DATABASE_URL" \
+            --exit-code 2>&1 | tee drift.log
+
+      - name: Uji integrasi (konkurensi stok, kedaluwarsa, katalog)
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm test:integration 2>&1 | tee integration.log
+
       - name: Laporkan error sebagai anotasi
         if: failure()
         shell: bash
         run: |
-          for f in build.log typecheck.log lint.log; do
+          for f in build.log typecheck.log lint.log migrate.log drift.log integration.log; do
             [ -f "$f" ] || continue
-            msg=$(tail -n 150 "$f" | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+            msg=$(tail -n 150 "$f" | sed -e 's/\x1b\[[0-9;]*m//g' -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
             echo "::error title=${f}::${msg}"
           done
 

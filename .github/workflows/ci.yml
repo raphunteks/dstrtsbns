@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # hanya untuk meng-commit pnpm-lock.yaml pertama ke branch PR
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Nilai dummy: CI tidak menyentuh database atau layanan nyata.
+      POSTGRES_PRISMA_URL: postgresql://ci:ci@localhost:5432/ci?schema=app
+      POSTGRES_URL_NON_POOLING: postgresql://ci:ci@localhost:5432/ci?schema=app
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install
+        id: install
+        shell: bash
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+            echo "created=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::pnpm-lock.yaml belum ada — install tanpa lockfile"
+            pnpm install --no-frozen-lockfile
+            echo "created=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit lockfile pertama ke branch PR
+        if: github.event_name == 'pull_request' && steps.install.outputs.created == 'true'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pnpm-lock.yaml
+          git commit -m "chore: tambah pnpm-lock.yaml dari CI"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
+
+      - name: Prisma validate
+        run: pnpm db:validate
+
+      - name: Unit test
+        run: pnpm test
+
+      - name: Build (termasuk typecheck & lint Next.js)
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee build.log
+
+      - name: Typecheck
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm typecheck 2>&1 | tee typecheck.log
+
+      - name: Lint
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm lint 2>&1 | tee lint.log
+
+      - name: Laporkan error sebagai anotasi
+        if: failure()
+        shell: bash
+        run: |
+          for f in build.log typecheck.log lint.log; do
+            [ -f "$f" ] || continue
+            msg=$(tail -n 150 "$f" | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=${f}::${msg}"
+          done
+
+      - name: Format check
+        # Belum memblokir: file awal ditulis tanpa prettier lokal. Jadikan wajib setelah `pnpm format` pertama.
+        continue-on-error: true
+        run: pnpm format:check

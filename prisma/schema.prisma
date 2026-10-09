@@ -1,0 +1,1115 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Daster Tasbon Olshop — model data (PRD v1.2 §10, DATA-001…034)
+//
+// Aturan yang dijaga schema ini:
+//  • Semua tabel di schema Postgres "app" — TIDAK diekspos ke Supabase Data API
+//    (lihat supabase/migrations/0001_lockdown.sql). Akses data hanya lewat server.
+//  • Uang selalu Int rupiah (BR-001). Kolom berakhiran "Idr".
+//  • Lima domain status dipisah di Order (BR-021, §9.2).
+//  • Snapshot order tidak bergantung pada produk yang bisa berubah (BR-005).
+//  • DATA-030 PakasirTransaction digabung ke PaymentAttempt agar tidak ada dua sumber kebenaran.
+//  • Wishlist & ulasan (SHOULD) ditambahkan di fase berikutnya.
+//
+// CHECK constraint yang tidak bisa diekspresikan Prisma (stok ≥ 0, reserved ≤ onHand,
+// harga ≥ 0) ditambahkan manual ke file migration saat Fase 2 — lihat CLAUDE.md.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
+  schemas   = ["app"]
+}
+
+// ═════════════════════════ ENUM ═════════════════════════
+
+enum UserStatus {
+  active
+  suspended
+  deleted
+
+  @@schema("app")
+}
+
+enum StaffRoleName {
+  admin_catalog
+  admin_order
+  admin_finance
+  super_admin
+
+  @@schema("app")
+}
+
+enum CategoryStatus {
+  active
+  hidden
+
+  @@schema("app")
+}
+
+enum ProductStatus {
+  draft
+  published
+  unpublished
+  archived
+
+  @@schema("app")
+}
+
+enum VariantStatus {
+  active
+  inactive
+
+  @@schema("app")
+}
+
+enum MediaStatus {
+  active
+  hidden
+
+  @@schema("app")
+}
+
+enum FulfillmentMode {
+  ready_stock
+  preorder
+  supplier_fulfilled
+
+  @@schema("app")
+}
+
+enum FulfillmentSourceType {
+  own_warehouse
+  preorder_production
+  supplier
+
+  @@schema("app")
+}
+
+enum InventoryReason {
+  initial_count
+  stock_in
+  correction
+  return_restock
+  damaged
+  sale_fulfilled
+  manual_out
+
+  @@schema("app")
+}
+
+enum ReservationState {
+  active
+  converted
+  released
+  expired
+
+  @@schema("app")
+}
+
+/// Status siklus pesanan (§9.1). Domain lain disimpan di kolom terpisah.
+enum OrderStatus {
+  pending_payment
+  paid
+  processing
+  packed
+  shipped
+  delivered
+  completed
+  payment_failed
+  expired
+  cancelled
+  payment_exception
+  return_requested
+  returned
+  refund_pending
+  partially_refunded
+  refunded
+
+  @@schema("app")
+}
+
+enum PaymentStatus {
+  unpaid
+  pending
+  paid
+  canceled
+  expired
+  failed
+  exception
+
+  @@schema("app")
+}
+
+enum FulfillmentStatus {
+  not_started
+  awaiting_supply
+  supplier_confirmed
+  picking
+  packed
+  ready_to_ship
+  shipment_requested
+  shipped
+  delivered
+  shipment_exception
+  fulfillment_exception
+
+  @@schema("app")
+}
+
+enum ReturnStatus {
+  requested
+  approved
+  rejected
+  in_transit
+  received
+  inspected
+  closed
+
+  @@schema("app")
+}
+
+enum RefundStatus {
+  not_requested
+  pending
+  processing
+  succeeded
+  failed
+  partial
+
+  @@schema("app")
+}
+
+enum SettlementStatus {
+  unsettled
+  settled
+  disputed
+  reconciled
+
+  @@schema("app")
+}
+
+enum PaymentProvider {
+  pakasir
+
+  @@schema("app")
+}
+
+/// Status transaksi Pakasir v2: pending / completed / canceled (BR-035) + status lokal.
+enum PaymentAttemptStatus {
+  pending
+  completed
+  canceled
+  expired
+  failed
+
+  @@schema("app")
+}
+
+enum PaymentEventValidation {
+  valid
+  invalid_secret
+  mismatch
+  duplicate
+
+  @@schema("app")
+}
+
+enum ShipmentMode {
+  komerce_delivery
+  manual_courier
+
+  @@schema("app")
+}
+
+enum ShipmentStatus {
+  draft
+  requested
+  picked_up
+  in_transit
+  delivered
+  exception
+  cancelled
+
+  @@schema("app")
+}
+
+enum RateValidation {
+  valid
+  stale
+  rejected
+
+  @@schema("app")
+}
+
+enum CouponType {
+  percentage
+  fixed_amount
+
+  @@schema("app")
+}
+
+enum RefundMethod {
+  manual_transfer
+  provider_dashboard
+
+  @@schema("app")
+}
+
+enum TicketType {
+  question
+  complaint
+  cancel_request
+  return_request
+  other
+
+  @@schema("app")
+}
+
+enum TicketStatus {
+  open
+  in_progress
+  waiting_customer
+  resolved
+  closed
+
+  @@schema("app")
+}
+
+enum ContentType {
+  faq
+  policy
+  banner
+  static
+
+  @@schema("app")
+}
+
+enum ContentStatus {
+  draft
+  published
+  archived
+
+  @@schema("app")
+}
+
+enum NotificationChannel {
+  email
+  whatsapp
+  sms
+
+  @@schema("app")
+}
+
+enum NotificationOutcome {
+  queued
+  sent
+  failed
+
+  @@schema("app")
+}
+
+enum ProviderService {
+  pakasir
+  rajaongkir_cost
+  komerce_delivery
+
+  @@schema("app")
+}
+
+enum ProviderEnvironment {
+  sandbox
+  live
+
+  @@schema("app")
+}
+
+enum FulfillmentCaseStatus {
+  requested
+  confirmed
+  exception
+  resolved
+
+  @@schema("app")
+}
+
+// ═════════════════════════ PENGGUNA ═════════════════════════
+
+/// DATA-001. id = auth.users.id dari Supabase Auth.
+model User {
+  id              String     @id @db.Uuid
+  email           String?    @unique
+  phone           String?    @unique
+  emailVerifiedAt DateTime?
+  phoneVerifiedAt DateTime?
+  status          UserStatus @default(active)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+
+  profile    CustomerProfile?
+  staffRoles StaffRole[]
+  addresses  Address[]
+  carts      Cart[]
+  orders     Order[]
+
+  @@schema("app")
+}
+
+/// Peran staf (§3.2, §11). Satu orang boleh punya beberapa peran.
+model StaffRole {
+  userId      String        @db.Uuid
+  role        StaffRoleName
+  grantedById String?       @db.Uuid
+  grantedAt   DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, role])
+  @@schema("app")
+}
+
+/// DATA-002
+model CustomerProfile {
+  userId           String    @id @db.Uuid
+  displayName      String?
+  marketingOptInAt DateTime? // opt-in terpisah dari transaksi (FR-034)
+  preferences      Json      @default("{}")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@schema("app")
+}
+
+/// DATA-003. Alamat tersimpan milik customer. Alamat pesanan disalin sebagai snapshot di Order.
+model Address {
+  id                      String   @id @default(uuid()) @db.Uuid
+  userId                  String   @db.Uuid
+  label                   String?
+  recipientName           String
+  phone                   String
+  provinceName            String
+  cityName                String
+  districtName            String
+  subdistrictName         String?
+  postalCode              String?
+  street                  String
+  landmark                String?
+  rajaongkirDestinationId String? // ID wilayah tervalidasi (FR-084)
+  isDefault               Boolean  @default(false)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@schema("app")
+}
+
+// ═════════════════════════ KATALOG ═════════════════════════
+
+/// DATA-004. attributeSchema menentukan field wajib per kategori (BR-031).
+model Category {
+  id              String         @id @default(uuid()) @db.Uuid
+  name            String
+  slug            String         @unique
+  description     String?
+  parentId        String?        @db.Uuid
+  status          CategoryStatus @default(active)
+  sortOrder       Int            @default(0)
+  attributeSchema Json           @default("{}")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@schema("app")
+}
+
+/// DATA-005
+model Product {
+  id               String        @id @default(uuid()) @db.Uuid
+  name             String
+  slug             String        @unique
+  description      String
+  material         String?
+  careInstructions String?
+  sizeChart        Json? // tabel ukuran terukur (FR-007, FR-010)
+  categoryId       String        @db.Uuid
+  status           ProductStatus @default(draft)
+  seoTitle         String?
+  seoDescription   String?
+  publishedAt      DateTime?
+  archivedAt       DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  category Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  variants ProductVariant[]
+  media    MediaAsset[]
+
+  @@index([status, categoryId])
+  @@schema("app")
+}
+
+/// DATA-006. Satu SKU per kombinasi atribut (FR-044).
+model ProductVariant {
+  id                  String          @id @default(uuid()) @db.Uuid
+  productId           String          @db.Uuid
+  sku                 String          @unique
+  attributes          Json // { "ukuran": "L", "warna": "Navy", "motif": "Bunga" }
+  attributeKey        String // bentuk ternormalisasi, mis. "motif=bunga|ukuran=l|warna=navy"
+  priceIdr            Int
+  compareAtPriceIdr   Int? // harga coret hanya bila ada bukti historis (BR-020)
+  weightGrams         Int
+  lengthCm            Int?
+  widthCm             Int?
+  heightCm            Int?
+  status              VariantStatus   @default(active)
+  fulfillmentMode     FulfillmentMode @default(ready_stock)
+  fulfillmentSourceId String          @db.Uuid
+  stockOnHand         Int             @default(0) // stok fisik ready_stock
+  stockReserved       Int             @default(0) // dikunci oleh StockReservation aktif
+  lowStockThreshold   Int?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  product              Product                @relation(fields: [productId], references: [id], onDelete: Cascade)
+  fulfillmentSource    FulfillmentSource      @relation(fields: [fulfillmentSourceId], references: [id], onDelete: Restrict)
+  media                MediaAsset[]
+  inventoryLedger      InventoryLedger[]
+  reservations         StockReservation[]
+  cartItems            CartItem[]
+  orderItems           OrderItem[]
+  supplierAvailability SupplierAvailability[]
+  preorderAllocation   PreorderAllocation?
+
+  @@unique([productId, attributeKey])
+  @@index([productId, status])
+  @@schema("app")
+}
+
+/// DATA-007. objectKey = path di Supabase Storage, bukan URL publik dengan data sensitif.
+model MediaAsset {
+  id        String      @id @default(uuid()) @db.Uuid
+  productId String      @db.Uuid
+  variantId String?     @db.Uuid
+  objectKey String
+  altText   String
+  sortOrder Int         @default(0)
+  width     Int?
+  height    Int?
+  status    MediaStatus @default(active)
+  createdAt DateTime    @default(now())
+
+  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([productId, sortOrder])
+  @@schema("app")
+}
+
+// ═════════════════════════ INVENTORI ═════════════════════════
+
+/// DATA-008. Setiap perubahan stok fisik tercatat beralasan (FR-045).
+model InventoryLedger {
+  id            String          @id @default(uuid()) @db.Uuid
+  variantId     String          @db.Uuid
+  delta         Int
+  reason        InventoryReason
+  referenceType String?
+  referenceId   String?
+  actorUserId   String?         @db.Uuid
+  note          String?
+  createdAt     DateTime        @default(now())
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  @@index([variantId, createdAt])
+  @@schema("app")
+}
+
+/// DATA-009. Reservasi atomik saat order pending_payment dibuat (BR-003, BR-004).
+model StockReservation {
+  id         String           @id @default(uuid()) @db.Uuid
+  variantId  String           @db.Uuid
+  orderId    String           @db.Uuid
+  quantity   Int
+  mode       FulfillmentMode
+  state      ReservationState @default(active)
+  expiresAt  DateTime
+  createdAt  DateTime         @default(now())
+  releasedAt DateTime?
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, variantId])
+  @@index([state, expiresAt])
+  @@schema("app")
+}
+
+/// DATA-028. Kuota kapasitas preorder, bukan stok tak terbatas (BR-024).
+model PreorderAllocation {
+  id                String    @id @default(uuid()) @db.Uuid
+  variantId         String    @unique @db.Uuid
+  quotaTotal        Int
+  quotaReserved     Int       @default(0)
+  processingDaysMin Int
+  processingDaysMax Int
+  cutoffAt          DateTime?
+  policyNote        String
+  active            Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@schema("app")
+}
+
+// ═════════════════════════ SUMBER PEMENUHAN ═════════════════════════
+
+/// DATA-026. Entitas internal — tidak punya akun seller (BR-030).
+model Supplier {
+  id                   String    @id @default(uuid()) @db.Uuid
+  code                 String    @unique
+  name                 String
+  contact              Json      @default("{}") // akses terbatas (FR-073)
+  slaDays              Int?
+  verifiedCapacityNote String?
+  active               Boolean   @default(false)
+  lastVerifiedAt       DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  availability SupplierAvailability[]
+  sources      FulfillmentSource[]
+
+  @@schema("app")
+}
+
+/// DATA-025. Asal kirim tervalidasi per kelompok checkout (BR-017).
+model FulfillmentSource {
+  id                  String                @id @default(uuid()) @db.Uuid
+  code                String                @unique
+  name                String
+  type                FulfillmentSourceType
+  originLabel         String // label non-sensitif untuk pembeli, mis. "Dikirim dari Makassar"
+  originAddress       Json // alamat lengkap — admin saja
+  rajaongkirOriginId  String?
+  komerceOriginId     String? // ID wilayah Delivery bisa berbeda dari Cost (BR-037)
+  processingDaysMin   Int                   @default(0)
+  processingDaysMax   Int                   @default(1)
+  active              Boolean               @default(false)
+  supplierId          String?               @db.Uuid
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  supplier Supplier?         @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  variants ProductVariant[]
+  orders   Order[]
+  cases    FulfillmentCase[]
+
+  @@schema("app")
+}
+
+/// DATA-027. Komitmen ketersediaan pemasok yang kedaluwarsa (BR-028).
+model SupplierAvailability {
+  id              String   @id @default(uuid()) @db.Uuid
+  variantId       String   @db.Uuid
+  supplierId      String   @db.Uuid
+  committedQty    Int
+  reservedQty     Int      @default(0)
+  validUntil      DateTime
+  sourceReference String?
+  lastCheckedAt   DateTime
+  createdAt       DateTime @default(now())
+
+  variant  ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  supplier Supplier       @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([variantId, validUntil])
+  @@schema("app")
+}
+
+// ═════════════════════════ KERANJANG ═════════════════════════
+
+/// DATA-010. Keranjang bukan reservasi stok (BR-003).
+model Cart {
+  id        String   @id @default(uuid()) @db.Uuid
+  token     String   @unique // cookie guest
+  userId    String?  @db.Uuid
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  items CartItem[]
+
+  @@index([userId])
+  @@schema("app")
+}
+
+model CartItem {
+  id            String   @id @default(uuid()) @db.Uuid
+  cartId        String   @db.Uuid
+  variantId     String   @db.Uuid
+  quantity      Int
+  addedPriceIdr Int // untuk mendeteksi perubahan harga (FR-012)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  cart    Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, variantId])
+  @@schema("app")
+}
+
+// ═════════════════════════ PESANAN ═════════════════════════
+
+/// DATA-011. Satu kelompok asal/mode per pesanan (BR-025).
+model Order {
+  id                    String            @id @default(uuid()) @db.Uuid
+  publicNumber          String            @unique // non-sekuensial, mis. DTS-7K3Q9M
+  userId                String?           @db.Uuid
+  contact               Json // snapshot nama/email/telepon pembeli
+  shippingAddress       Json // snapshot alamat + ID wilayah
+  status                OrderStatus       @default(pending_payment)
+  paymentStatus         PaymentStatus     @default(unpaid)
+  fulfillmentStatus     FulfillmentStatus @default(not_started)
+  refundStatus          RefundStatus      @default(not_requested)
+  settlementStatus      SettlementStatus  @default(unsettled)
+  fulfillmentMode       FulfillmentMode
+  fulfillmentSourceId   String            @db.Uuid
+  processingDaysMin     Int
+  processingDaysMax     Int
+  itemsSubtotalIdr      Int
+  discountIdr           Int               @default(0)
+  shippingIdr           Int
+  feeIdr                Int               @default(0)
+  grandTotalIdr         Int
+  currency              String            @default("IDR")
+  couponCode            String?
+  idempotencyKey        String            @unique // satu order per klik "Bayar" (FR-023)
+  guestAccessTokenHash  String?           @unique // akses guest via token, bukan ID saja (FR-028)
+  reservationExpiresAt  DateTime
+  placedAt              DateTime          @default(now())
+  paidAt                DateTime?
+  cancelledAt           DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  user              User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fulfillmentSource FulfillmentSource      @relation(fields: [fulfillmentSourceId], references: [id], onDelete: Restrict)
+  items             OrderItem[]
+  reservations      StockReservation[]
+  paymentAttempts   PaymentAttempt[]
+  shipments         Shipment[]
+  returnRequests    ReturnRequest[]
+  refunds           Refund[]
+  supportTickets    SupportTicket[]
+  fulfillmentCases  FulfillmentCase[]
+  notifications     NotificationLog[]
+  couponRedemption  CouponRedemption?
+  rateSnapshot      RajaOngkirRateSnapshot?
+
+  @@index([status, createdAt])
+  @@index([paymentStatus])
+  @@index([userId, createdAt])
+  @@schema("app")
+}
+
+/// DATA-012. Semua field produk disalin sebagai snapshot.
+model OrderItem {
+  id                 String          @id @default(uuid()) @db.Uuid
+  orderId            String          @db.Uuid
+  variantId          String?         @db.Uuid
+  productNameSnap    String
+  skuSnap            String
+  attributesSnap     Json
+  unitPriceIdr       Int
+  quantity           Int
+  discountIdr        Int             @default(0)
+  lineTotalIdr       Int
+  weightGramsSnap    Int
+  fulfillmentModeSnap FulfillmentMode
+
+  order   Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant ProductVariant?   @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  cases   FulfillmentCase[]
+
+  @@index([orderId])
+  @@schema("app")
+}
+
+/// DATA-031. Tarif ongkir terpilih yang dibekukan saat order dibuat (BR-036).
+model RajaOngkirRateSnapshot {
+  id              String         @id @default(uuid()) @db.Uuid
+  orderId         String         @unique @db.Uuid
+  originId        String
+  destinationId   String
+  weightGrams     Int
+  courierCode     String
+  serviceCode     String
+  serviceName     String
+  costIdr         Int
+  etd             String?
+  quotedAt        DateTime
+  validationState RateValidation @default(valid)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@schema("app")
+}
+
+// ═════════════════════════ PEMBAYARAN ═════════════════════════
+
+/// DATA-013 + DATA-030. Satu order bisa punya beberapa attempt, hanya satu yang sah.
+model PaymentAttempt {
+  id                 String               @id @default(uuid()) @db.Uuid
+  orderId            String               @db.Uuid
+  provider           PaymentProvider      @default(pakasir)
+  projectSlug        String
+  providerOrderId    String               @unique // order_id yang dikirim ke Pakasir
+  txnId              String?              @unique
+  method             String // payment_link | qris | va_*
+  amountIdr          Int
+  feeIdr             Int?
+  totalPaymentIdr    Int?
+  status             PaymentAttemptStatus @default(pending)
+  isSandbox          Boolean
+  paymentUrl         String?
+  qrString           String?
+  vaNumber           String?
+  expiresAt          DateTime?
+  completedAt        DateTime?
+  verifiedStatusAt   DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  events  PaymentEvent[]
+  refunds Refund[]
+
+  @@index([orderId])
+  @@index([status, createdAt])
+  @@schema("app")
+}
+
+/// DATA-014. Event pembayaran yang sudah diverifikasi dan diproses.
+model PaymentEvent {
+  id               String                 @id @default(uuid()) @db.Uuid
+  paymentAttemptId String?                @db.Uuid
+  fingerprint      String                 @unique
+  eventType        String
+  validation       PaymentEventValidation
+  payloadRedacted  Json
+  processedAt      DateTime?
+  createdAt        DateTime               @default(now())
+
+  paymentAttempt PaymentAttempt? @relation(fields: [paymentAttemptId], references: [id], onDelete: SetNull)
+
+  @@schema("app")
+}
+
+/// DATA-024
+model SettlementRecord {
+  id                String           @id @default(uuid()) @db.Uuid
+  provider          PaymentProvider  @default(pakasir)
+  providerReference String           @unique
+  amountIdr         Int
+  feeIdr            Int
+  status            SettlementStatus @default(settled)
+  matchedAttemptIds String[]
+  settledAt         DateTime
+  createdAt         DateTime         @default(now())
+
+  @@schema("app")
+}
+
+// ═════════════════════════ PENGIRIMAN ═════════════════════════
+
+/// DATA-015. Resi hanya ada setelah serah-terima valid (BR-012).
+model Shipment {
+  id                  String         @id @default(uuid()) @db.Uuid
+  orderId             String         @db.Uuid
+  mode                ShipmentMode
+  courierCode         String
+  serviceCode         String
+  costIdr             Int
+  waybill             String?
+  status              ShipmentStatus @default(draft)
+  shippedAt           DateTime?
+  deliveredAt         DateTime?
+  trackingLastSyncAt  DateTime?
+  createdById         String?        @db.Uuid
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  deliveryOrder DeliveryOrder?
+
+  @@unique([courierCode, waybill])
+  @@index([orderId])
+  @@schema("app")
+}
+
+/// DATA-032. Satu order Komerce Delivery per shipment (BR-038).
+model DeliveryOrder {
+  id               String    @id @default(uuid()) @db.Uuid
+  shipmentId       String    @unique @db.Uuid
+  komerceOrderRef  String    @unique
+  providerStatus   String
+  financialStatus  String?
+  pickupStatus     String?
+  labelRef         String?
+  lastSyncedAt     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+
+  @@schema("app")
+}
+
+/// DATA-029. Jejak tindak lanjut preorder/pemasok (FR-076).
+model FulfillmentCase {
+  id          String                @id @default(uuid()) @db.Uuid
+  orderId     String                @db.Uuid
+  orderItemId String?               @db.Uuid
+  mode        FulfillmentMode
+  sourceId    String?               @db.Uuid
+  status      FulfillmentCaseStatus @default(requested)
+  ownerId     String?               @db.Uuid
+  note        String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  order     Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem OrderItem?         @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  source    FulfillmentSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@schema("app")
+}
+
+// ═════════════════════════ PROMO ═════════════════════════
+
+/// DATA-016. value: persen dalam basis point (1000 = 10%) atau rupiah tetap.
+model Coupon {
+  id               String     @id @default(uuid()) @db.Uuid
+  code             String     @unique
+  type             CouponType
+  value            Int
+  minSubtotalIdr   Int?
+  maxDiscountIdr   Int?
+  startsAt         DateTime
+  endsAt           DateTime
+  usageLimit       Int?
+  perCustomerLimit Int?
+  eligibility      Json       @default("{}") // { categoryIds: [], variantIds: [] }
+  active           Boolean    @default(false)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  redemptions CouponRedemption[]
+
+  @@schema("app")
+}
+
+model CouponRedemption {
+  id          String   @id @default(uuid()) @db.Uuid
+  couponId    String   @db.Uuid
+  orderId     String   @unique @db.Uuid // 1 kupon per order (BR-006)
+  userId      String?  @db.Uuid
+  discountIdr Int
+  createdAt   DateTime @default(now())
+
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([couponId])
+  @@schema("app")
+}
+
+// ═════════════════════════ PURNAJUAL ═════════════════════════
+
+/// DATA-017
+model ReturnRequest {
+  id           String       @id @default(uuid()) @db.Uuid
+  orderId      String       @db.Uuid
+  status       ReturnStatus @default(requested)
+  reason       String
+  items        Json // [{ orderItemId, quantity }]
+  evidenceKeys String[] // path bucket privat "bukti-retur"
+  decisionNote String?
+  decidedById  String?      @db.Uuid
+  decidedAt    DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@schema("app")
+}
+
+/// DATA-018. Total refund tidak boleh melebihi dana yang berhasil dibayar (BR-014).
+model Refund {
+  id                String       @id @default(uuid()) @db.Uuid
+  orderId           String       @db.Uuid
+  paymentAttemptId  String       @db.Uuid
+  amountIdr         Int
+  status            RefundStatus @default(pending)
+  method            RefundMethod
+  reason            String
+  requestedById     String       @db.Uuid
+  approvedById      String?      @db.Uuid
+  providerReference String?
+  evidenceKey       String?
+  succeededAt       DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  paymentAttempt PaymentAttempt @relation(fields: [paymentAttemptId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@schema("app")
+}
+
+/// DATA-019
+model SupportTicket {
+  id         String       @id @default(uuid()) @db.Uuid
+  orderId    String?      @db.Uuid
+  channel    String
+  type       TicketType
+  summary    String
+  status     TicketStatus @default(open)
+  assigneeId String?      @db.Uuid
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@schema("app")
+}
+
+// ═════════════════════════ KONTEN & SISTEM ═════════════════════════
+
+/// DATA-020. FAQ, kebijakan berversi, banner dengan masa tayang.
+model PageContent {
+  id          String        @id @default(uuid()) @db.Uuid
+  slug        String        @unique
+  type        ContentType
+  title       String
+  body        String
+  status      ContentStatus @default(draft)
+  version     Int           @default(1)
+  publishedAt DateTime?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@schema("app")
+}
+
+/// DATA-021. Gagal kirim notifikasi tidak membatalkan order (BR-022).
+model NotificationLog {
+  id             String              @id @default(uuid()) @db.Uuid
+  template       String
+  orderId        String?             @db.Uuid
+  userId         String?             @db.Uuid
+  channel        NotificationChannel
+  outcome        NotificationOutcome @default(queued)
+  retryCount     Int                 @default(0)
+  lastError      String?
+  idempotencyKey String              @unique
+  sentAt         DateTime?
+  createdAt      DateTime            @default(now())
+
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([outcome, createdAt])
+  @@schema("app")
+}
+
+/// DATA-022. Append-only secara logis; tanpa secret/PII berlebih (SEC-010).
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @db.Uuid
+  actorRole   String?
+  action      String
+  targetType  String
+  targetId    String
+  before      Json?
+  after       Json?
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@schema("app")
+}
+
+/// DATA-023. Satu baris (id = 1). Kunci API TIDAK disimpan di sini.
+model StoreSettings {
+  id                     Int      @id @default(1)
+  storeName              String   @default("Daster Tasbon Olshop")
+  supportEmail           String?
+  supportWhatsapp        String?
+  timezone               String   @default("Asia/Makassar")
+  reservationHoldMinutes Int      @default(30)
+  featureFlags           Json     @default("{\"ready_stock\":true,\"preorder\":false,\"supplier_fulfilled\":false,\"komerce_delivery\":false}")
+  businessInfo           Json     @default("{}")
+  holidays               Json     @default("[]")
+  updatedById            String?  @db.Uuid
+  updatedAt              DateTime @updatedAt
+
+  @@schema("app")
+}
+
+/// DATA-033. Hanya NAMA variabel env tempat secret berada, bukan nilainya.
+model ProviderCredentialReference {
+  id              String              @id @default(uuid()) @db.Uuid
+  service         ProviderService
+  environment     ProviderEnvironment
+  secretReference String
+  active          Boolean             @default(true)
+  lastRotatedAt   DateTime?
+  createdAt       DateTime            @default(now())
+
+  @@unique([service, environment])
+  @@schema("app")
+}
+
+/// DATA-034. Inbox webhook lintas provider: dedup + replay aman.
+model ProviderWebhookInbox {
+  id              String          @id @default(uuid()) @db.Uuid
+  provider        ProviderService
+  fingerprint     String
+  externalEventId String?
+  verified        Boolean
+  payloadRedacted Json
+  attempts        Int             @default(0)
+  lastError       String?
+  receivedAt      DateTime        @default(now())
+  processedAt     DateTime?
+
+  @@unique([provider, fingerprint])
+  @@index([processedAt, receivedAt])
+  @@schema("app")
+}

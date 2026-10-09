@@ -1,0 +1,69 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+/* Font dimuat lewat next/font (layout.tsx) sebagai variabel runtime. */
+@theme inline {
+  --font-body: var(--font-jakarta), Arial, sans-serif;
+  --font-heading: var(--font-jakarta), Arial, sans-serif;
+  --font-display: var(--font-dm-serif), Georgia, serif; /* HANYA satu headline hero kampanye */
+}
+
+@layer base {
+  html,
+  body {
+    overflow-x: clip;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-style: normal; /* heading tidak pernah italic */
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+
+  /* Fokus terlihat instan, tidak dianimasikan (WCAG 2.2, DESIGN.md §12) */
+  :focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  /* Link di dalam konten selalu bergaris bawah, bukan warna saja (DESIGN.md §4.3) */
+  .prose-link,
+  main p a {
+    color: var(--color-accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

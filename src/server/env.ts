@@ -18,6 +18,14 @@ const optionalString = z
   .optional()
   .transform((v) => (v && v.trim() !== "" ? v : undefined));
 
+function hasAppSchema(url: string): boolean {
+  try {
+    return new URL(url).searchParams.get("schema") === "app";
+  } catch {
+    return false;
+  }
+}
+
 const serverSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -31,8 +39,12 @@ const serverSchema = z
     SUPABASE_SERVICE_ROLE_KEY: optionalString,
     SUPABASE_JWT_SECRET: optionalString,
 
-    POSTGRES_PRISMA_URL: z.string().min(1),
-    POSTGRES_URL_NON_POOLING: z.string().min(1),
+    // WAJIB memuat ?schema=app — tanpa itu Prisma menulis ke schema public yang diekspos Data API.
+    POSTGRES_PRISMA_URL: z.string().min(1).refine(hasAppSchema, "harus memuat parameter ?schema=app"),
+    POSTGRES_URL_NON_POOLING: z
+      .string()
+      .min(1)
+      .refine(hasAppSchema, "harus memuat parameter ?schema=app"),
 
     PAKASIR_BASE_URL: z.string().url().default("https://app.pakasir.com/api/v2"),
     PAKASIR_PROJECT_SLUG: optionalString,

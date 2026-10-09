@@ -49,21 +49,24 @@ pnpm typecheck
 pnpm lint
 pnpm db:validate         # prisma validate
 pnpm db:migrate:dev      # buat migration (butuh POSTGRES_* di .env)
+pnpm db:seed             # data contoh (bukan production)
+pnpm test:integration    # butuh Postgres kosong di POSTGRES_* (?schema=app)
 pnpm build
 ```
 
-## TODO yang sudah diketahui
+## Database — hal yang mudah salah
 
-- **Fase 2:** saat membuat migration pertama (`prisma migrate dev --create-only`), tambahkan manual ke SQL:
-  `CHECK ("stockOnHand" >= 0)`, `CHECK ("stockReserved" >= 0 AND "stockReserved" <= "stockOnHand")`,
-  `CHECK ("priceIdr" >= 0)`, `CHECK ("quantity" > 0)` di CartItem/OrderItem/StockReservation,
-  `CHECK ("grandTotalIdr" >= 0)`, `CHECK ("amountIdr" > 0)` di Refund.
-- `pnpm-lock.yaml` belum ada di commit pertama (dibuat oleh CI / install lokal pertama) — commit setelah tersedia, lalu Dockerfile memakai `--frozen-lockfile`.
+- URL Postgres **wajib** `?schema=app` (dicek `env.ts`). Migration Prisma tidak meng-qualify nama schema; tanpa parameter ini tabel jatuh ke `public` yang diekspos Data API.
+- Raw SQL selalu tulis nama lengkap: `"app"."ProductVariant"`, `::"app"."ReservationState"`.
+- CHECK constraint ada di `prisma/migrations/*_constraints/` (Prisma tidak memodelkannya). Migration baru yang mengubah tabel terkait harus menjaga constraint itu.
+- Jangan pakai partial index di migration — `prisma migrate diff` akan menganggapnya drift (CI gagal).
+- Stok hanya berubah lewat `src/server/modules/inventory/*` (UPDATE bersyarat + ledger). Jangan `update({ stockOnHand })` langsung.
+- Database diasumsikan zona waktu UTC (default Supabase).
 
 ## Rencana fase
 
-1. Fondasi ← **selesai di branch `fase-1-fondasi`**
-2. Katalog & inventori (produk, varian, ledger, reservasi atomik, uji konkurensi)
+1. Fondasi ← selesai (PR #1)
+2. Katalog & inventori ← selesai (PR #2): `modules/catalog`, `modules/inventory`, uji integrasi `pnpm test:integration`
 3. Keranjang, checkout, ongkir RajaOngkir
 4. Pembayaran Pakasir v2 (webhook inbox, rekonsiliasi, late-paid exception)
 5. Admin & fulfillment (pesanan, resi, fallback manual, refund manual, audit, notifikasi)

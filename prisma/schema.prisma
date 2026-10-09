@@ -100,6 +100,7 @@ enum InventoryReason {
   damaged
   sale_committed // stok fisik dialokasikan ke order yang sudah dibayar
   manual_out
+  cancel_restock // order lunas dibatalkan sebelum dikirim — barang tidak pernah keluar
 
   @@schema("app")
 }

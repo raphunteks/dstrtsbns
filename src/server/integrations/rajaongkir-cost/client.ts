@@ -57,7 +57,27 @@ export type ShippingOption = {
   etd: string | null;
 };
 
-export type RajaOngkirClient = ReturnType<typeof createRajaOngkirClient>;
+const trackingSchema = z.object({
+  meta: metaSchema,
+  data: z
+    .object({
+      delivered: z.boolean(),
+      summary: z.object({ status: z.string().nullish() }).partial().nullish(),
+      delivery_status: z
+        .object({ status: z.string().nullish(), pod_date: z.string().nullish(), pod_time: z.string().nullish() })
+        .partial()
+        .nullish(),
+    })
+    .nullable(),
+});
+
+export type WaybillTracking = { delivered: boolean; status: string | null; podDate: string | null };
+
+export type RajaOngkirClient = Pick<
+  ReturnType<typeof createRajaOngkirClient>,
+  "searchDestinations" | "calculateDomesticCost"
+> &
+  Partial<Pick<ReturnType<typeof createRajaOngkirClient>, "trackWaybill">>;
 
 export function createRajaOngkirClient(config: { baseUrl: string; apiKey: string; fetchImpl?: FetchLike }) {
   const base = config.baseUrl.replace(/\/+$/, "");
@@ -139,6 +159,39 @@ export function createRajaOngkirClient(config: { baseUrl: string; apiKey: string
           costIdr: o.cost,
           etd: o.etd ?? null,
         }));
+    },
+
+    /**
+     * Lacak resi (FR-086). Dokumentasi tidak konsisten soal letak parameter (query vs form),
+     * jadi dikirim di keduanya. Beberapa kurir (mis. JNE) butuh 5 digit terakhir telepon penerima.
+     * null = resi tidak ditemukan (404).
+     */
+    async trackWaybill(input: { waybill: string; courier: string; lastPhoneDigits?: string }): Promise<WaybillTracking | null> {
+      const params = new URLSearchParams({ awb: input.waybill, courier: input.courier });
+      if (input.lastPhoneDigits) params.set("last_phone_number", input.lastPhoneDigits);
+      const { status, body } = await providerRequest({
+        provider: PROVIDER,
+        url: `${base}/track/waybill?${params}`,
+        init: {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/x-www-form-urlencoded" },
+          body: params.toString(),
+        },
+        fetchImpl: config.fetchImpl,
+        retries: 1,
+      });
+      if (status === 404) return null;
+      if (status !== 200) throw new ProviderError(PROVIDER, "bad_request", status, "Lacak resi gagal");
+      const parsed = trackingSchema.safeParse(body);
+      if (!parsed.success || !parsed.data.data) {
+        throw new ProviderError(PROVIDER, "invalid_response", status, "Format lacak resi tidak dikenali");
+      }
+      const d = parsed.data.data;
+      return {
+        delivered: d.delivered,
+        status: d.delivery_status?.status ?? d.summary?.status ?? null,
+        podDate: d.delivery_status?.pod_date ?? null,
+      };
     },
   };
 }

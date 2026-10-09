@@ -1,4 +1,5 @@
 import "server-only";
+import { runExpireReservations, runExpireSupplierAvailability } from "./inventory-jobs";
 
 /**
  * Daftar job yang boleh dipanggil pg_cron lewat /api/jobs/<nama>.
@@ -24,12 +25,12 @@ const notYet =
   });
 
 export const jobs = {
-  "expire-reservations": notYet("Fase 2 (inventori)"),
+  "expire-reservations": runExpireReservations,
   "process-webhook-inbox": notYet("Fase 4 (pembayaran)"),
   "reconcile-pakasir": notYet("Fase 4 (pembayaran)"),
   "send-notifications": notYet("Fase 5 (admin & notifikasi)"),
   "sync-waybill": notYet("Fase 5 (fulfillment)"),
-  "expire-supplier-availability": notYet("Fase 2 (inventori)"),
+  "expire-supplier-availability": runExpireSupplierAvailability,
   "daily-reconciliation": notYet("Fase 5 (keuangan)"),
 } satisfies Record<string, JobHandler>;
 

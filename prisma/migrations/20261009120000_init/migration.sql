@@ -1,6 +1,10 @@
 -- CreateSchema
 CREATE SCHEMA IF NOT EXISTS "app";
 
+-- Pastikan semua tipe & tabel dibuat di schema "app" (bukan public yang diekspos Data API),
+-- juga bila file ini dijalankan manual lewat SQL Editor.
+SET search_path TO "app";
+
 -- CreateEnum
 CREATE TYPE "UserStatus" AS ENUM ('active', 'suspended', 'deleted');
 

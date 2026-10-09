@@ -10,6 +10,10 @@ const config = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", ignoreRestSiblings: true },
+      ],
       // Rahasia hanya boleh dibaca lewat src/server/env.ts (SEC-006).
       "no-restricted-properties": [
         "error",

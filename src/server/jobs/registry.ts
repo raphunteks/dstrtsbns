@@ -1,5 +1,6 @@
 import "server-only";
 import { runExpireReservations, runExpireSupplierAvailability } from "./inventory-jobs";
+import { runProcessWebhookInbox, runReconcilePakasir } from "./payment-jobs";
 
 /**
  * Daftar job yang boleh dipanggil pg_cron lewat /api/jobs/<nama>.
@@ -26,8 +27,8 @@ const notYet =
 
 export const jobs = {
   "expire-reservations": runExpireReservations,
-  "process-webhook-inbox": notYet("Fase 4 (pembayaran)"),
-  "reconcile-pakasir": notYet("Fase 4 (pembayaran)"),
+  "process-webhook-inbox": runProcessWebhookInbox,
+  "reconcile-pakasir": runReconcilePakasir,
   "send-notifications": notYet("Fase 5 (admin & notifikasi)"),
   "sync-waybill": notYet("Fase 5 (fulfillment)"),
   "expire-supplier-availability": runExpireSupplierAvailability,

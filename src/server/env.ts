@@ -32,6 +32,8 @@ const serverSchema = z
     APP_URL: z.string().url().transform((v) => v.replace(/\/+$/, "")),
     DEPLOY_TARGET: z.enum(["vercel", "vps"]).default("vercel"),
     CRON_SECRET: z.string().min(32, "CRON_SECRET minimal 32 karakter"),
+    // Kunci HMAC untuk link akses pesanan guest (FR-028). Ganti = semua link lama tidak berlaku.
+    APP_SECRET: z.string().min(32, "APP_SECRET minimal 32 karakter"),
     STORE_TIMEZONE: z.string().default("Asia/Makassar"),
 
     SUPABASE_URL: z.string().url(),

@@ -1,0 +1,7 @@
+# Konfigurasi minimal Supabase CLI. Jalankan `supabase link --project-ref <ref>` sekali.
+project_id = "daster-tasbon-olshop"
+
+[api]
+# Hanya public yang diekspos ke Data API. Schema "app" dan "ops" sengaja TIDAK ada di sini.
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
